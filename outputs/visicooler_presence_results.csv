@@ -1,0 +1,2 @@
+rowid,modelname,imagefilename,classid,classtext,value,inference,modelrun,processed_flag,storeid,storename,s3path_actual_file,s3path_annotated_file
+1,yolo_visicooler_presence,IMG-MS4SKUIK-PU3C.jpg,1001,Visicooler - Visicooler available,Y,0.8423287272453308,2026-07-30 17:41:19.825474,N,2110112061,7T. TAPARI MOMO,June_store_images/IMG-MS4SKUIK-PU3C.jpg,ModelResults/Visicooler_510/IMG-MS4SKUIK-PU3C.jpg
