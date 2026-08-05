@@ -203,11 +203,11 @@ def _build_queries(iteration_id: int, staging_id: int) -> list[dict]:
                 ) cp
                     ON cp.store_id = f.storeid
                    AND cp.image_file_name = f.filename
-                WHERE f.storeid = 1130110017
-                  AND f.subcategory_id = 605
-                  AND f.uploadtimestamp >= '2026-07-01'
-                  AND f.uploadtimestamp < '2026-08-01'
-                  AND cp.image_file_name IS NULL;
+                WHERE f.subcategory_id = 605
+                  AND f.uploadtimestamp >= '2026-08-01'
+                  AND f.uploadtimestamp < '2026-09-01'
+                  AND cp.image_file_name IS NULL
+                  ON CONFLICT DO NOTHING;
             """,
         },
         # ── 4 ─────────────────────────────────────────────────────────────────
