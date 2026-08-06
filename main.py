@@ -12,9 +12,10 @@ from app.chatgpt_analyzer import run_yolo_analysis
 from app.file_uploader import FileUploader
 from app.db_handler import initialize_db_connection, close_db_connection
 from app.visicooler import run_visicooler_analysis, check_visibilitydetails_schema
-from cap_pipeline_runner import run_cap_pipeline, reclassify_low_detection_impure
-from shelf_sequence_checker import run_shelf_sequence_check
+from cap_pipeline_runner import run_cap_pipeline, reclassify_low_detection_impure, run_planogram_pipeline
+from shelf_sequence_checker import run_shelf_sequence_check, run_shelf_sequence_check_planogram
 from visicooler_presence_detector import run_visicooler_presence_analysis
+from planogram_detector import run_planogram_detection
 
 # ── Telegram bot ───────────────────────────────────────────────────────────────
 from bot_notifier import (
@@ -292,6 +293,26 @@ def execute_models(pod_id, iterationid, stagingid):
                 _record_error(msg)
                 notify_pipeline_error("Visicooler Presence Detection", str(e), pod_id)
 
+            # ── Planogram Detection (subcategory 603) ───────────────────────────
+            _update_state(current_stage="Planogram Detection")
+            logger.info("Running planogram SKU-only detection on subcategory 603 images...")
+            try:
+                planogram_rows = run_planogram_detection(
+                    image_paths=image_paths,
+                    config=config,
+                    s3_handler=s3_handler,
+                    db_config=db_config,
+                    cyclecountid=cyclecountid,
+                    iterationid=iterationid,
+                )
+                logger.info(f"Planogram detection complete: {planogram_rows} rows inserted")
+            except Exception as e:
+                msg = f"Planogram detection failed: {e}"
+                logger.error(msg)
+                logger.error(traceback.format_exc())
+                _record_error(msg)
+                notify_pipeline_error("Planogram Detection", str(e), pod_id)
+
             # ── YOLO analysis ─────────────────────────────────────────────────
             _update_state(current_stage="YOLO Analysis")
             logger.info("Running YOLO analysis...")
@@ -438,8 +459,22 @@ def main():
                 "DELETE FROM temp.structural_count_temp WHERE iteration_id = %s",
                 (iterationid,)
             )
+        cur.execute("""
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'temp' AND table_name = 'sku_planogram_temp'
+        """)
+        deleted_planogram = 0
+        if cur.fetchone() is not None:
+            cur.execute(
+                "DELETE FROM temp.sku_planogram_temp WHERE iteration_id = %s",
+                (iterationid,)
+            )
+            deleted_planogram = cur.rowcount
         conn.commit()
-        logger.info(f"Cleared {deleted_sku} SKU records, {deleted_cap} cap records")
+        logger.info(
+            f"Cleared {deleted_sku} SKU records, {deleted_cap} cap records, "
+            f"{deleted_planogram} planogram SKU records"
+        )
         logger.info("Temp tables ready — batches will APPEND data")
     except Exception as e:
         logger.error(f"Failed to clear temp tables: {e}")
@@ -517,6 +552,38 @@ def main():
                         _record_error(msg)
                         notify_pipeline_error("CAP Pipeline", str(e), pod_id)
 
+                    # ── Planogram Pipeline (subcategory 603) ──────────────────
+                    # Runs AFTER run_cap_pipeline for this same iterationid:
+                    # its iterationtranid-offset logic reads
+                    # orgi.coolermetricsmaster's current max tranid to keep
+                    # planogram tranids from colliding with 605's in the
+                    # shared orgi.shelfsequencecompliance table downstream.
+                    _update_state(current_stage="Planogram Pipeline")
+                    logger.info("=" * 60)
+                    logger.info("Starting planogram post-processing pipeline...")
+                    logger.info("=" * 60)
+                    try:
+                        planogram_result = run_planogram_pipeline(
+                            db_config=db_config,
+                            iteration_id=iterationid,
+                        )
+                        if planogram_result.overall_status != "success":
+                            logger.error("Planogram pipeline finished with errors")
+                            notify_pipeline_error(
+                                "Planogram Pipeline", "One or more steps failed", pod_id
+                            )
+                        else:
+                            logger.info(
+                                f"Planogram pipeline completed successfully "
+                                f"in {planogram_result.total_duration_ms:.0f} ms."
+                            )
+                    except Exception as e:
+                        msg = f"Planogram pipeline exception: {e}"
+                        logger.error(msg)
+                        logger.error(traceback.format_exc())
+                        _record_error(msg)
+                        notify_pipeline_error("Planogram Pipeline", str(e), pod_id)
+
                     # ── Shelf-Sequence Compliance Check ───────────────────────
                     _update_state(current_stage="Shelf Sequence Check")
                     logger.info("=" * 60)
@@ -555,6 +622,31 @@ def main():
                         logger.error(traceback.format_exc())
                         _record_error(msg)
                         notify_pipeline_error("Shelf Sequence Check", str(e), pod_id)
+
+                    # ── Planogram Shelf-Sequence Compliance Check ─────────────
+                    _update_state(current_stage="Planogram Shelf Sequence Check")
+                    logger.info("=" * 60)
+                    logger.info(f"Running planogram shelf-sequence check for iteration {iterationid}...")
+                    logger.info("=" * 60)
+                    try:
+                        planogram_shelf_results = run_shelf_sequence_check_planogram(
+                            db_config=db_config,
+                            iterationid=iterationid,
+                        )
+                        planogram_shelf_passed = sum(
+                            1 for r in planogram_shelf_results if r[3] == 'Y'
+                        )
+                        logger.info(
+                            f"Planogram shelf-sequence check done: "
+                            f"{planogram_shelf_passed}/{len(planogram_shelf_results)} "
+                            f"images compliant (iteration {iterationid})"
+                        )
+                    except Exception as e:
+                        msg = f"Planogram shelf-sequence check exception: {e}"
+                        logger.error(msg)
+                        logger.error(traceback.format_exc())
+                        _record_error(msg)
+                        notify_pipeline_error("Planogram Shelf Sequence Check", str(e), pod_id)
                     break
 
                 logger.info("=" * 60)

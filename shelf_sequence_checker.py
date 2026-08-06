@@ -1824,20 +1824,26 @@ def insert_dino_detections_final(cur, records: list) -> int:
 
 
 @retry_on_network_error(max_retries=3, delay=5)
-def fetch_shelf_detections(cur, iterationid=None):
+def fetch_shelf_detections(cur, iterationid=None,
+                            master_table="orgi.coolermetricsmaster",
+                            transaction_table="orgi.coolermetricstransaction"):
     """
     Returns rows of (iterationid, iterationtranid, storeid, caserid,
     imagefilename, productclassid, x1, y1, x2, y2) — one row per detection,
-    LEFT JOINed from orgi.coolermetricsmaster so that images with zero
-    detections still show up (with productclassid/imagefilename/bbox NULL)
-    and count toward the cooler's shelf total.
+    LEFT JOINed from `master_table` so that images with zero detections
+    still show up (with productclassid/imagefilename/bbox NULL) and count
+    toward the cooler's shelf total.
+
+    `master_table`/`transaction_table` default to the regular 605-flow
+    tables; pass the *_planogram equivalents to evaluate the subcategory-603
+    planogram detections instead (see run_shelf_sequence_check_planogram).
     """
-    query = """
+    query = f"""
         SELECT m.iterationid, m.iterationtranid, m.storeid, m.caserid,
                t.imagefilename, t.productclassid,
                t.x1, t.y1, t.x2, t.y2
-        FROM orgi.coolermetricsmaster m
-        LEFT JOIN orgi.coolermetricstransaction t
+        FROM {master_table} m
+        LEFT JOIN {transaction_table} t
           ON t.iterationid = m.iterationid AND t.iterationtranid = m.iterationtranid
     """
     params = ()
@@ -1892,12 +1898,22 @@ def _most_common(values):
     return max(set(values), key=values.count)
 
 
-def run_shelf_sequence_check(db_config, iterationid=None):
+def run_shelf_sequence_check(db_config, iterationid=None,
+                              master_table="orgi.coolermetricsmaster",
+                              transaction_table="orgi.coolermetricstransaction"):
     """
     Main entry point. Connects to the DB, evaluates every store cooler's
     shelf ordering (grouped by iterationid+storeid+caserid, ranked by
     iterationtranid), and upserts the results into
     orgi.shelfsequencecompliance.
+
+    `master_table`/`transaction_table` default to the regular 605-flow
+    tables. Pass the *_planogram equivalents (see
+    run_shelf_sequence_check_planogram below) to evaluate subcategory-603
+    planogram data instead — both flows share iterationid but their
+    iterationtranid ranges are kept non-overlapping upstream (see
+    cap_pipeline_runner._build_planogram_queries), so both can safely
+    upsert into the same orgi.shelfsequencecompliance table.
 
     Returns the list of (iterationid, iterationtranid, storeid,
     compliance_flag) evaluated, for logging/testing.
@@ -1909,8 +1925,11 @@ def run_shelf_sequence_check(db_config, iterationid=None):
         conn.commit()
 
         product_maps = load_product_maps(cur)
-        rows = fetch_shelf_detections(cur, iterationid=iterationid)
-        logger.info(f"Fetched {len(rows)} rows to evaluate")
+        rows = fetch_shelf_detections(
+            cur, iterationid=iterationid,
+            master_table=master_table, transaction_table=transaction_table,
+        )
+        logger.info(f"Fetched {len(rows)} rows to evaluate ({master_table})")
 
         # purity_status per (iterationid, imagefilename), written by
         # visicooler.py's GroundingDINO Case 1/2/3 purity check.
@@ -2023,6 +2042,27 @@ def run_shelf_sequence_check(db_config, iterationid=None):
         raise
     finally:
         close_db_connection(conn, cur)
+
+
+def run_shelf_sequence_check_planogram(db_config, iterationid=None):
+    """
+    Thin wrapper: evaluates the subcategory-603 planogram shelves instead
+    of the regular 605 ones, reading from orgi.coolermetricsmaster_planogram
+    / orgi.coolermetricstransaction_planogram and upserting into the same
+    orgi.shelfsequencecompliance table used by run_shelf_sequence_check.
+
+    Call this AFTER run_shelf_sequence_check() for the same iterationid so
+    the 605-flow's shelves are already in orgi.shelfsequencecompliance —
+    not that it matters for correctness (iterationtranid ranges never
+    overlap between the two flows), but it keeps the two checks' log output
+    in a sensible order.
+    """
+    return run_shelf_sequence_check(
+        db_config,
+        iterationid=iterationid,
+        master_table="orgi.coolermetricsmaster_planogram",
+        transaction_table="orgi.coolermetricstransaction_planogram",
+    )
 
 
 if __name__ == "__main__":

@@ -80,5 +80,16 @@
     "visicooler_presence_output_csv": "outputs/visicooler_presence_results.csv",
     "visicooler_presence_fallback_model_path": "yolov8x.pt",
     "visicooler_presence_fallback_conf_threshold": 0.1
+  },
+  "planogram_config": {
+    "subcategory_id": 603,
+    "shelf_model_path": "data/shelfmodel.pt",
+    "shelf_class_id": 80,
+    "shelf_conf_threshold": 0.05,
+    "shelf_merge_threshold": 10,
+    "sku_model_path": "data/availability_may_5th.pt",
+    "availability_conf": 0.12,
+    "output_folder_path": "outputs/planogram_segmented_images/",
+    "output_s3_folder": "ModelResults/Planogram"
   }
 }

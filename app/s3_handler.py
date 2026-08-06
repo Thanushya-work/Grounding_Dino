@@ -210,7 +210,8 @@ class S3Handler:
         base_filename = re.sub(r'[\\:*?"<>|]', '', base_filename)
         return base_filename
 
-    def download_images_from_s3(self, temp_dir, pod_id, visicooler_subcategory_ids=None):
+    def download_images_from_s3(self, temp_dir, pod_id, visicooler_subcategory_ids=None,
+                                 planogram_subcategory_ids=None):
         """
         Download all images for stores assigned to this pod.
         Only fetches files where processed_flag = 'I' and podid matches.
@@ -219,12 +220,19 @@ class S3Handler:
         (default: {601}) are downloaded into a separate subfolder
         (<temp_dir>/visicooler_601/) instead of directly into temp_dir, so
         they're physically segregated for the visicooler-presence detector.
-        They are still returned in the same `image_paths` list as everything
-        else — only their local_path differs — so downstream processed_flag
-        updates etc. continue to work unchanged.
+
+        Images whose subcategory_id is in `planogram_subcategory_ids`
+        (default: {603}) are likewise downloaded into their own subfolder
+        (<temp_dir>/planogram_603/) for the SKU-only planogram detector.
+
+        Both groups are still returned in the same `image_paths` list as
+        everything else — only their local_path differs — so downstream
+        processed_flag updates etc. continue to work unchanged.
         """
         if visicooler_subcategory_ids is None:
             visicooler_subcategory_ids = {601}
+        if planogram_subcategory_ids is None:
+            planogram_subcategory_ids = {603}
         try:
             from app.db_handler import initialize_db_connection, close_db_connection
             conn, cur = initialize_db_connection(self.db_config)
@@ -271,6 +279,10 @@ class S3Handler:
                         visicooler_dir = os.path.join(temp_dir, "visicooler_601")
                         os.makedirs(visicooler_dir, exist_ok=True)
                         local_path = os.path.join(visicooler_dir, clean_filename)
+                    elif subcategory_id in planogram_subcategory_ids:
+                        planogram_dir = os.path.join(temp_dir, "planogram_603")
+                        os.makedirs(planogram_dir, exist_ok=True)
+                        local_path = os.path.join(planogram_dir, clean_filename)
                     else:
                         local_path = os.path.join(temp_dir, clean_filename)
 
@@ -347,6 +359,16 @@ class S3Handler:
                     f"  {visicooler_count} of those are visicooler subcategory "
                     f"{sorted(visicooler_subcategory_ids)} images, saved separately "
                     f"under {os.path.join(temp_dir, 'visicooler_601')}"
+                )
+
+            planogram_count = sum(
+                1 for img in image_paths if img[6] in planogram_subcategory_ids
+            )
+            if planogram_count:
+                logger.info(
+                    f"  {planogram_count} of those are planogram subcategory "
+                    f"{sorted(planogram_subcategory_ids)} images, saved separately "
+                    f"under {os.path.join(temp_dir, 'planogram_603')}"
                 )
 
             if failed_files:

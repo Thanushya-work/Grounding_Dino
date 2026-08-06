@@ -1,6 +1,4 @@
 rowid,modelname,imagefilename,classid,classtext,value,inference,modelrun,processed_flag,storeid,storename,s3path_actual_file,s3path_annotated_file
-2,yolo_activation,IMG-MS4SKTCH-FUTS.jpg,1056,RGB Crate Stacking,Y,1.0,2026-07-30 17:41:45.083048,N,2110112061,7T. TAPARI MOMO,June_store_images/IMG-MS4SKTCH-FUTS.jpg,ModelResults/VisibleItem_510/IMG-MS4SKTCH-FUTS.jpg
-3,yolo_activation,IMG-MS4SKTY2-NTFY.jpg,1027,Table Sticker,Y,1.0,2026-07-30 17:41:45.669660,N,2110112061,7T. TAPARI MOMO,June_store_images/IMG-MS4SKTY2-NTFY.jpg,ModelResults/VisibleItem_510/IMG-MS4SKTY2-NTFY.jpg
-4,yolo_activation,IMG-MS4SKZJ6-SHVA.jpg,1022,Combo Board,Y,1.0,2026-07-30 17:41:46.161014,N,2110112061,7T. TAPARI MOMO,June_store_images/IMG-MS4SKZJ6-SHVA.jpg,ModelResults/VisibleItem_510/IMG-MS4SKZJ6-SHVA.jpg
-5,yolo_activation,IMG-MRARZ48O-7M5J.jpg,1085,Front Window Branding,Y,1.0,2026-07-30 17:41:47.169134,N,3110111722,"""DADDY,S CHIPLEDHUNGA""",June_store_images/IMG-MRARZ48O-7M5J.jpg,ModelResults/VisibleItem_510/IMG-MRARZ48O-7M5J.jpg
-6,yolo_activation,IMG-MRARZ48O-7M5J.jpg,1053,DPS,Y,1.0,2026-07-30 17:41:47.169134,N,3110111722,"""DADDY,S CHIPLEDHUNGA""",June_store_images/IMG-MRARZ48O-7M5J.jpg,ModelResults/VisibleItem_510/IMG-MRARZ48O-7M5J.jpg
+3,yolo_activation,IMG-MSEM41OV-ZWYD.jpg,1056,RGB Crate Stacking,Y,1.0,2026-08-06 17:06:44.459155,N,1210110219,RAJ KIRANA PASAL,June_store_images/IMG-MSEM41OV-ZWYD.jpg,ModelResults/VisibleItem_520/IMG-MSEM41OV-ZWYD.jpg
+4,yolo_activation,IMG-MSD8JRB0-33WR.jpg,1064,Shelf Display,Y,1.0,2026-08-06 17:06:45.452970,N,3110112680,TULSI KIRANA PASAL,June_store_images/IMG-MSD8JRB0-33WR.jpg,ModelResults/VisibleItem_520/IMG-MSD8JRB0-33WR.jpg
+5,yolo_activation,IMG-MSD8JRTQ-ISNW.jpg,1053,DPS,Y,1.0,2026-08-06 17:06:45.858064,N,3110112680,TULSI KIRANA PASAL,June_store_images/IMG-MSD8JRTQ-ISNW.jpg,ModelResults/VisibleItem_520/IMG-MSD8JRTQ-ISNW.jpg
