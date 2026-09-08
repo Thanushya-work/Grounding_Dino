@@ -58,7 +58,7 @@ Rules (as specified by the business)
       Take the largest resolved SKU size on shelf N-1 (the shelf immediately
       above, i.e. ONLY the previous shelf — no skipping through empty
       shelves) and the smallest resolved SKU size on shelf N (the shelf
-      below it). Passes iff min(shelf N) > max(shelf N-1) — i.e. sizes must
+            below it). Passes iff min(shelf N) >= max(shelf N-1) — i.e. sizes must
       grow as you go DOWN the cooler, from shelf 1 (top) to shelf N
       (bottom). If shelf N-1 has zero resolved SKU detections, Condition 1
       automatically fails for shelf N (no carrying-forward to an earlier
@@ -66,7 +66,7 @@ Rules (as specified by the business)
 
   Condition 2 — left-to-right size growth, evaluated on shelf N alone:
       Sort shelf N's resolved SKUs by their bounding box left edge (x1)
-      ascending. Passes iff sizes strictly increase left-to-right. Any SKU
+            ascending. Passes iff sizes are non-decreasing left-to-right. Any SKU
       missing x1/y1/x2/y2 is dropped from this check entirely (not counted
       either way). A shelf left with 0 usable SKUs after that filtering
       fails Condition 2; a shelf with exactly 1 usable SKU trivially
@@ -99,7 +99,7 @@ Assumptions made explicit (flag these if they don't match your intent):
   3. "Left-to-right" is determined by sorting on x1 (bounding box left
      edge) ascending. If your coordinate system's origin/axis direction
      means x1 doesn't correspond to physical left-to-right, say so.
-  4. "Increase" in both conditions means strictly greater (ties fail).
+    4. "Increase" in both conditions means greater than or equal (ties pass).
   5. orgi.coolermetricsmaster has no imagefilename column, so an image with
      literally zero detection rows (nothing detected on it at all) still
      counts as a shelf position (affecting N), but its imagefilename will
@@ -591,7 +591,7 @@ def redistribute_unidentified_bottles(raw_items: list, product_maps: dict) -> li
 def _condition2_left_to_right(items):
     """
     Condition 2 for one shelf: sort its resolved SKUs by bounding-box left
-    edge (x1) ascending and check sizes strictly increase left-to-right.
+    edge (x1) ascending and check sizes are non-decreasing left-to-right.
 
     items: list of dicts, each with keys 'size', 'x1', 'y1', 'x2', 'y2'
         (bbox values may be None). Only resolved (non-"Other") SKUs should
@@ -613,8 +613,8 @@ def _condition2_left_to_right(items):
     usable.sort(key=lambda it: it['x1'])
     sizes_lr = [it['size'] for it in usable]
     for i in range(1, len(sizes_lr)):
-        if sizes_lr[i] <= sizes_lr[i - 1]:
-            return False, f"condition2: sizes not increasing left-to-right, got {sizes_lr}"
+        if sizes_lr[i] < sizes_lr[i - 1]:
+            return False, f"condition2: sizes not non-decreasing left-to-right, got {sizes_lr}"
     return True, ''
 
 
@@ -647,9 +647,9 @@ def evaluate_store_shelf_sequence(shelf_items_by_rank: list) -> list:
         cur_items = shelf_items_by_rank[i]
 
         # ── Condition 1: top-to-bottom size growth, vs. previous shelf only ──
-        # Every SKU on the current shelf must be greater than the largest
-        # SKU on the previous shelf. Checking min(current) > max(previous)
-        # is mathematically identical to checking ALL current SKUs > that
+        # Every SKU on the current shelf must be at least as large as the largest
+        # SKU on the previous shelf. Checking min(current) >= max(previous)
+        # is mathematically identical to checking ALL current SKUs >= that
         # max (the smallest one clearing the bar means every larger one
         # does too) — but the remark below spells out every size and every
         # failing one explicitly, so it's never ambiguous which SKUs were
@@ -662,13 +662,13 @@ def evaluate_store_shelf_sequence(shelf_items_by_rank: list) -> list:
         else:
             prev_max = max(it['size'] for it in prev_items)
             cur_sizes = sorted(it['size'] for it in cur_items)
-            if cur_sizes[0] > prev_max:
+            if cur_sizes[0] >= prev_max:
                 cond1_pass = True
                 cond1_remark = ''
             else:
-                failing = [s for s in cur_sizes if not (s > prev_max)]
+                failing = [s for s in cur_sizes if not (s >= prev_max)]
                 cond1_remark = (
-                    f"condition1: not all SKUs on this shelf are > previous shelf "
+                    f"condition1: not all SKUs on this shelf are >= previous shelf "
                     f"max {prev_max}ml — this shelf's sizes {cur_sizes}, "
                     f"failing ones {failing}"
                 )
