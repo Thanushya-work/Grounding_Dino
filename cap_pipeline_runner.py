@@ -210,8 +210,8 @@ def _build_queries(iteration_id: int, staging_id: int) -> list[dict]:
                    AND cp.iteration_id = {iid}
                 WHERE
                     f.subcategory_id = 605
-                    AND f.uploadtimestamp >= '2026-08-01'
-                    AND f.uploadtimestamp < '2026-09-01'
+                    AND f.uploadtimestamp >= '2026-09-01'
+                    AND f.uploadtimestamp < '2026-10-01'
                     AND cp.store_id IS NULL
                 ON CONFLICT DO NOTHING;
             """,
