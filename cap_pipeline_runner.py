@@ -896,7 +896,109 @@ def reclassify_low_detection_impure(db_config: dict, iteration_id: int) -> int:
                 conn.close()
             except Exception:
                 pass
+            
+# ── Post-shelf-sequence-check: first-605-image reclassification ────────────────
+def reclassify_first_image_impure(db_config: dict, iteration_id: int) -> int:
+    """
+    For THIS iteration_id, take the FIRST subcategory-605 image of each store
+    (lowest orgi.fileupload.filesequenceid among the images that belong to
+    this iteration) and, if its orgi.shelfsequencecompliance row is IMPURE
+    with 1-2 orgi.dino_nonbeverage_detections, flip it to PURE.
 
+    Call this AFTER run_shelf_sequence_check(), same as
+    reclassify_low_detection_impure(). Both only move IMPURE -> PURE, so the
+    order between the two does not matter.
+
+    Returns the number of rows flipped. Returns 0 on failure (logged, not
+    raised), so a failure here does not fail the overall pipeline run.
+    """
+    iid = int(iteration_id)  # guard against bad input
+
+    sql = """
+        WITH iter_605_images AS (
+            -- Every 605 image that belongs to this iteration, with its upload sequence
+            SELECT
+                s.iterationid,
+                s.iterationtranid,
+                s.storeid,
+                f.filesequenceid
+            FROM orgi.shelfsequencecompliance s
+            JOIN orgi.fileupload f
+              ON f.storeid  = s.storeid
+             AND f.filename = s.imagefilename
+            WHERE s.iterationid     = %(iid)s
+              AND f.subcategory_id  = 605
+        ),
+        first_image AS (
+            -- One row per store: its first-uploaded 605 image in this iteration
+            SELECT DISTINCT ON (storeid)
+                iterationid,
+                iterationtranid,
+                storeid
+            FROM iter_605_images
+            ORDER BY storeid, filesequenceid ASC, iterationtranid ASC
+        ),
+        targets AS (
+            -- ...and only if that image is IMPURE with 1-2 detections
+            SELECT
+                fi.iterationid,
+                fi.iterationtranid
+            FROM first_image fi
+            JOIN orgi.shelfsequencecompliance s
+              ON s.iterationid     = fi.iterationid
+             AND s.iterationtranid = fi.iterationtranid
+            JOIN orgi.dino_nonbeverage_detections d
+              ON d.iterationid     = fi.iterationid
+             AND d.iterationtranid = fi.iterationtranid
+            WHERE s.purity_status = 'IMPURE'
+            GROUP BY fi.iterationid, fi.iterationtranid
+            HAVING COUNT(d.productname) BETWEEN 1 AND 2
+        )
+        UPDATE orgi.shelfsequencecompliance s
+        SET purity_status = 'PURE'
+        FROM targets t
+        WHERE s.iterationid     = t.iterationid
+          AND s.iterationtranid = t.iterationtranid
+          AND s.purity_status   = 'IMPURE'
+        RETURNING s.iterationtranid, s.storeid, s.imagefilename;
+    """
+
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=db_config["host"],
+            port=db_config["port"],
+            dbname=db_config["database"],
+            user=db_config["user"],
+            password=db_config["password"],
+        )
+        conn.autocommit = False
+
+        with conn:  # commits on success, rolls back on exception
+            with conn.cursor() as cur:
+                cur.execute(sql, {"iid": iid})
+                flipped = cur.fetchall()
+
+        logger.info(
+            f"  Reclassify first-605-image IMPURE rows -> PURE "
+            f"(iteration_id={iid}): {len(flipped)} row(s) updated"
+        )
+        return len(flipped)
+
+    except Exception as exc:
+        logger.error(
+            f"  Reclassify first-605-image IMPURE rows failed "
+            f"(iteration_id={iid}): {exc}"
+        )
+        logger.error(traceback.format_exc())
+        return 0
+
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 # ── Planogram (subcategory-603) pipeline ────────────────────────────────────────
 def _build_planogram_queries(iteration_id: int, base_tranid: int) -> list[dict]:

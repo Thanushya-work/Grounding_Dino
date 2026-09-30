@@ -12,7 +12,7 @@ from app.chatgpt_analyzer import run_yolo_analysis
 from app.file_uploader import FileUploader
 from app.db_handler import initialize_db_connection, close_db_connection
 from app.visicooler import run_visicooler_analysis, check_visibilitydetails_schema
-from cap_pipeline_runner import run_cap_pipeline, reclassify_low_detection_impure, run_planogram_pipeline
+from cap_pipeline_runner import run_cap_pipeline, reclassify_low_detection_impure, reclassify_first_image_impure, run_planogram_pipeline
 from shelf_sequence_checker import run_shelf_sequence_check, run_shelf_sequence_check_planogram
 from visicooler_presence_detector import run_visicooler_presence_analysis
 from planogram_detector import run_planogram_detection
@@ -614,6 +614,18 @@ def main():
                         )
                         logger.info(
                             f"Reclassified {reclassified} low-detection-count "
+                            f"IMPURE row(s) back to PURE (iteration {iterationid})"
+                        )
+
+                        # Flip each store's first 605 image from IMPURE to PURE
+                        # if it has 1-2 non-beverage detections. Must run AFTER
+                        # run_shelf_sequence_check() for the same reason as above.
+                        first_img_reclassified = reclassify_first_image_impure(
+                            db_config=db_config,
+                            iteration_id=iterationid,
+                        )
+                        logger.info(
+                            f"Reclassified {first_img_reclassified} first-605-image "
                             f"IMPURE row(s) back to PURE (iteration {iterationid})"
                         )
                     except Exception as e:
